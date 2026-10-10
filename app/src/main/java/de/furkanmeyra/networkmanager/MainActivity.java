@@ -18,13 +18,19 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.wireguard.config.Config;
+
+import java.io.InputStream;
+
 public class MainActivity extends Activity {
     private static final int VPN_REQUEST_CODE = 204;
+    private static final int CONFIG_PICK_REQUEST_CODE = 205;
     private ConnectivityManager connectivityManager;
     private TextView statusText;
     private TextView typeText;
     private TextView detailsText;
     private TextView vpnStatusText;
+    private TextView configText;
     private LinearLayout content;
 
     @Override public void onCreate(Bundle savedInstanceState) {
@@ -45,7 +51,7 @@ public class MainActivity extends Activity {
         root.addView(title, matchWrap());
 
         TextView subtitle = new TextView(this);
-        subtitle.setText("Bağlantını ve kullanıcı onaylı VPN servisini yönet.");
+        subtitle.setText("Bağlantını ve kullanıcı onaylı WireGuard VPN'ini yönet.");
         subtitle.setTextSize(15);
         subtitle.setTextColor(0xFFCFD8DC);
         subtitle.setGravity(Gravity.CENTER);
@@ -119,23 +125,38 @@ public class MainActivity extends Activity {
             Toast.makeText(this, "Ağ takibi durduruldu.", Toast.LENGTH_SHORT).show();
         });
 
-        content.addView(makeText("VPN kontrolü", 22, 0xFFFFFFFF, true), matchWrap());
-        vpnStatusText = makeText("VPN durumu kontrol ediliyor…", 18, 0xFF80CBC4, true);
+        content.addView(makeText("WireGuard VPN", 22, 0xFFFFFFFF, true), matchWrap());
+        vpnStatusText = makeText(WireGuardController.getStatus(), 17, 0xFF80CBC4, true);
         content.addView(vpnStatusText, matchWrap());
-        addButton("VPN'i aç", this::requestVpnStart);
-        addButton("VPN'i kapat", this::stopVpn);
+        configText = makeText(WireGuardController.hasConfig()
+            ? "WireGuard yapılandırması bu uygulama oturumunda yüklü."
+            : "Henüz VPN sunucusu/yapılandırması eklenmedi.", 14, 0xFFE0E0E0, false);
+        content.addView(configText, matchWrap());
+        addButton("WireGuard .conf dosyası içe aktar", this::pickWireGuardConfig);
+        addButton("WireGuard VPN'e bağlan", this::requestVpnStart);
+        addButton("VPN bağlantısını kes", this::stopVpn);
 
         content.addView(makeText(
-            "VPN altyapısı ilk aşamadadır. Şu an kullanıcı onayıyla bir VPN arayüzü oluşturur ancak trafik rotası/DNS eklemez ve internet trafiğini yakalamaz ya da engellemez. Gerçek trafik yönlendirmesi ayrı bir sonraki geliştirmedir. Android, VPN çalışırken durum bildirimi gösterebilir.",
+            "Güvenlik koruması: internetin tamamını yakalayan 0.0.0.0/0 ve ::/0 rotaları ile VPN genelinde DNS değiştiren yapılandırmalar kabul edilmez. Yalnızca bölünmüş tünel kullanılır; böylece normal internet rotası VPN'e taşınmaz. Henüz sunucu veya .conf dosyan yoksa VPN bağlanmaz ve mevcut internet bağlantın değiştirilmez. Yapılandırma yalnızca bellekte tutulur; uygulama kapanınca yeniden içe aktarılmalıdır.",
             14, 0xFFFFCC80, false), matchWrap());
 
         refreshStatus();
         refreshVpnStatus();
     }
 
+    private void pickWireGuardConfig() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("*/*");
+        startActivityForResult(intent, CONFIG_PICK_REQUEST_CODE);
+    }
+
     private void requestVpnStart() {
-        if (VpnControlService.running) {
-            Toast.makeText(this, "VPN zaten çalışıyor.", Toast.LENGTH_SHORT).show();
+        if (!WireGuardController.hasConfig()) {
+            Toast.makeText(this, "Önce VPN sağlayıcından aldığın WireGuard .conf dosyasını içe aktar.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        if (WireGuardController.isConnected()) {
             refreshVpnStatus();
             return;
         }
@@ -143,53 +164,63 @@ public class MainActivity extends Activity {
         if (consentIntent != null) {
             startActivityForResult(consentIntent, VPN_REQUEST_CODE);
         } else {
-            startVpnService();
+            startWireGuard();
         }
     }
 
-    private void startVpnService() {
-        try {
-            Intent intent = new Intent(this, VpnControlService.class);
-            intent.setAction(VpnControlService.ACTION_START);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent);
-            else startService(intent);
-            Toast.makeText(this, "VPN başlatma isteği gönderildi.", Toast.LENGTH_SHORT).show();
-        } catch (RuntimeException e) {
-            Toast.makeText(this, "VPN başlatılamadı. İzin ve sistem ayarlarını kontrol et.", Toast.LENGTH_LONG).show();
-        }
-        refreshVpnStatus();
+    private void startWireGuard() {
+        vpnStatusText.setText("WireGuard bağlantısı kuruluyor…");
+        WireGuardController.connect(getApplicationContext(), message -> runOnUiThread(() -> {
+            if (vpnStatusText != null) vpnStatusText.setText(message);
+            refreshStatus();
+            Toast.makeText(this, message, Toast.LENGTH_LONG).show();
+        }));
     }
 
     private void stopVpn() {
-        Intent intent = new Intent(this, VpnControlService.class);
-        intent.setAction(VpnControlService.ACTION_STOP);
-        try {
-            startService(intent);
-        } catch (RuntimeException ignored) {
-            stopService(new Intent(this, VpnControlService.class));
-        }
-        VpnControlService.running = false;
-        Toast.makeText(this, "VPN kapatma isteği gönderildi.", Toast.LENGTH_SHORT).show();
-        refreshVpnStatus();
+        WireGuardController.disconnect(message -> runOnUiThread(() -> {
+            if (vpnStatusText != null) vpnStatusText.setText(message);
+            refreshStatus();
+            Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
+        }));
     }
 
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == VPN_REQUEST_CODE) {
             if (resultCode == RESULT_OK) {
-                startVpnService();
+                startWireGuard();
             } else {
                 Toast.makeText(this, "VPN izni verilmedi; VPN başlatılmadı.", Toast.LENGTH_LONG).show();
             }
             refreshVpnStatus();
+            return;
+        }
+        if (requestCode == CONFIG_PICK_REQUEST_CODE && resultCode == RESULT_OK && data != null && data.getData() != null) {
+            try (InputStream stream = getContentResolver().openInputStream(data.getData())) {
+                if (stream == null) throw new IllegalArgumentException("Dosya okunamadı.");
+                Config parsed = Config.parse(stream);
+                WireGuardController.validateSafeSplitTunnel(parsed);
+                WireGuardController.setConfig(parsed);
+                if (configText != null) configText.setText("WireGuard yapılandırması doğrulandı ve belleğe alındı.");
+                refreshVpnStatus();
+                Toast.makeText(this, "WireGuard yapılandırması yüklendi. Gizli anahtarlar kaydedilmedi.", Toast.LENGTH_LONG).show();
+            } catch (Exception e) {
+                String message = e.getMessage();
+                Toast.makeText(this, "Yapılandırma reddedildi: " +
+                    (message == null ? "dosya okunamadı veya biçim geçersiz." : message), Toast.LENGTH_LONG).show();
+            }
         }
     }
 
     private void refreshVpnStatus() {
         if (vpnStatusText == null) return;
-        vpnStatusText.setText(VpnControlService.running
-            ? "● VPN altyapısı açık (trafik yönlendirmesi kapalı)"
-            : "● VPN kapalı");
+        vpnStatusText.setText(WireGuardController.getStatus());
+        if (configText != null) {
+            configText.setText(WireGuardController.hasConfig()
+                ? "WireGuard yapılandırması bu uygulama oturumunda yüklü."
+                : "Henüz VPN sunucusu/yapılandırması eklenmedi.");
+        }
     }
 
     private void refreshStatus() {
@@ -202,10 +233,10 @@ public class MainActivity extends Activity {
 
         String type = "Bilinmiyor";
         if (caps != null) {
-            if (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) type = "Wi‑Fi";
+            if (caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) type = "VPN";
+            else if (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) type = "Wi-Fi";
             else if (caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) type = "Mobil veri";
             else if (caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) type = "Ethernet";
-            else if (caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) type = "VPN";
         }
         typeText.setText("Bağlantı türü: " + type);
         detailsText.setText(connected
