@@ -137,7 +137,7 @@ public class MainActivity extends Activity {
         addButton("VPN bağlantısını kes", this::stopVpn);
 
         content.addView(makeText(
-            "Güvenlik koruması: internetin tamamını yakalayan 0.0.0.0/0 ve ::/0 rotaları ile VPN genelinde DNS değiştiren yapılandırmalar kabul edilmez. Yalnızca bölünmüş tünel kullanılır; böylece normal internet rotası VPN'e taşınmaz. Henüz sunucu veya .conf dosyan yoksa VPN bağlanmaz ve mevcut internet bağlantın değiştirilmez. Yapılandırma yalnızca bellekte tutulur; uygulama kapanınca yeniden içe aktarılmalıdır.",
+            "Full Tunnel desteği: sağlayıcının .conf dosyasındaki 0.0.0.0/0 ve ::/0 rotaları ile DNS ayarları desteklenir. Full Tunnel, internet trafiğini VPN sunucusuna yönlendirir; VPN bağlantısı kurulamazsa internet erişimi etkilenebilir. Yalnızca güvendiğin VPN sağlayıcısından aldığın yapılandırmayı içe aktar. Yapılandırma yalnızca bellekte tutulur; uygulama kapanınca yeniden içe aktarılmalıdır.",
             14, 0xFFFFCC80, false), matchWrap());
 
         refreshStatus();
@@ -200,7 +200,7 @@ public class MainActivity extends Activity {
             try (InputStream stream = getContentResolver().openInputStream(data.getData())) {
                 if (stream == null) throw new IllegalArgumentException("Dosya okunamadı.");
                 Config parsed = Config.parse(stream);
-                WireGuardController.validateSafeSplitTunnel(parsed);
+                WireGuardController.validateConfig(parsed);
                 WireGuardController.setConfig(parsed);
                 if (configText != null) configText.setText("WireGuard yapılandırması doğrulandı ve belleğe alındı.");
                 refreshVpnStatus();
