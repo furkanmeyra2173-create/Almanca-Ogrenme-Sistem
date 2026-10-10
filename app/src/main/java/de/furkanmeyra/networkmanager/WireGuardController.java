@@ -9,7 +9,6 @@ import com.wireguard.config.Config;
 import com.wireguard.config.InetNetwork;
 import com.wireguard.config.Peer;
 
-import java.net.Inet4Address;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Consumer;
@@ -63,8 +62,8 @@ public final class WireGuardController {
             }
             for (InetNetwork network : peer.getAllowedIps()) {
                 // A zero-length prefix is a default route and can capture all traffic.
-                if (network.getMask() == 0) {
-                    throw new IllegalArgumentException("0.0.0.0/0 veya ::/0 varsayılan rotası güvenlik için engellendi. Yalnızca bölünmüş tünel yapılandırması kullan.");
+                if (network.getMask() <= 1) {
+                    throw new IllegalArgumentException("Varsayılan veya çok geniş /0-/1 rotaları güvenlik için engellendi. Yalnızca sınırlı bölünmüş tünel yapılandırması kullan.");
                 }
                 hasRoute = true;
             }
