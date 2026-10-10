@@ -65,7 +65,6 @@ jobs:
           retention-days: 14
 
       - name: Publish GitHub Release
-        if: github.event_name == 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ github.token }}
           TAG_NAME: v1.0.0-build.${{ github.run_number }}
@@ -74,4 +73,4 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "Ağ Yönetimi Android $TAG_NAME" \
-            --notes "Automated Android build. Ag-Yonetimi.apk is the installable universal APK. Ag-Yonetimi.apks is the bundletool package. This build currently includes VPN service scaffolding only; it does not route internet traffic until an upstream VPN endpoint/protocol is configured."
+            --notes "Automated Android build. Ag-Yonetimi.apk is the installable universal APK. Ag-Yonetimi.apks is the bundletool package. SAFETY NOTE: this build contains VPN service scaffolding only and does NOT route internet traffic. Real VPN routing requires a configured, reachable VPN endpoint and protocol; no default route is installed, so normal internet access is not intentionally redirected or blocked."
