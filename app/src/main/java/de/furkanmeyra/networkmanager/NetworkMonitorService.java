@@ -13,7 +13,8 @@ import android.os.Build;
 import android.os.IBinder;
 
 public class NetworkMonitorService extends Service {
-    private static final String CHANNEL_ID = "network_monitor";
+    // A new channel ID lets Android apply the quieter settings on existing installs.
+    private static final String CHANNEL_ID = "network_monitor_quiet_v2";
     private static final int NOTIFICATION_ID = 2071;
     private ConnectivityManager connectivityManager;
     private ConnectivityManager.NetworkCallback callback;
@@ -45,7 +46,10 @@ public class NetworkMonitorService extends Service {
     private void createChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel channel = new NotificationChannel(CHANNEL_ID, "Ağ takibi", NotificationManager.IMPORTANCE_LOW);
-            channel.setDescription("Ağ bağlantısı durum bildirimleri");
+            channel.setDescription("Sessiz ağ bağlantısı durum bildirimi");
+            channel.setSound(null, null);
+            channel.enableVibration(false);
+            channel.setShowBadge(false);
             ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).createNotificationChannel(channel);
         }
     }
@@ -57,12 +61,17 @@ public class NetworkMonitorService extends Service {
                 .setContentText(text)
                 .setSmallIcon(android.R.drawable.stat_sys_download_done)
                 .setOngoing(true)
+                .setSilent(true)
                 .build();
         }
         return new Notification.Builder(this)
             .setContentTitle("Ağ Yönetimi")
             .setContentText(text)
             .setSmallIcon(android.R.drawable.stat_sys_download_done)
+            .setOngoing(true)
+            .setPriority(Notification.PRIORITY_LOW)
+            .setSound(null)
+            .setVibrate(new long[] {0L})
             .setOngoing(true)
             .build();
     }
