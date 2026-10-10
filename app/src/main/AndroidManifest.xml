@@ -18,18 +18,8 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <service
-            android:name=".VpnControlService"
-            android:permission="android.permission.BIND_VPN_SERVICE"
-            android:exported="true"
-            android:foregroundServiceType="specialUse">
-            <intent-filter>
-                <action android:name="android.net.VpnService" />
-            </intent-filter>
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="User-started VPN connection control" />
-        </service>
+        <!-- The official WireGuard tunnel dependency contributes its GoBackend.VpnService
+             declaration through manifest merging. Do not register a second VpnService. -->
         <service
             android:name=".NetworkMonitorService"
             android:exported="false"
