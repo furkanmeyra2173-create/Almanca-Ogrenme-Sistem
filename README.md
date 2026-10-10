@@ -1,9 +1,14 @@
-# Almanca Öğrenme Uygulaması — Ağ Yönetimi
+# Ağ Yönetimi — Android WireGuard VPN
 
-Bu Android projesinin ilk sürümü internet bağlantısı durumunu gösterir ve kullanıcı başlatınca arka plan bildirimli ağ takibi yapar.
+Uygulama Android'in kullanıcı onaylı VPN arayüzünü ve WireGuard tünel altyapısını kullanır. Kullanıcı, güvendiği sağlayıcıdan aldığı `.conf` dosyasını uygulamaya içe aktarabilir. Sağlayıcı yapılandırmasında `AllowedIPs = 0.0.0.0/0, ::/0` varsa Full Tunnel rotaları ve sağlayıcının DNS ayarları desteklenir.
 
-> Not: Bu sürüm gerçek VPN tüneli kurmaz ve uygulamaların internet erişimini engellemez. VPN yönlendirmesi eklenmeden önce trafiğin güvenli biçimde iletilmesi gerekir.
+## Güvenlik ve kullanım
 
-## APKS üretimi
+- Özel anahtarlar uygulama günlüklerine yazılmaz ve yapılandırma dosyası uygulama tarafından kalıcı olarak kaydedilmez. Uygulama yeniden başlatılınca yapılandırmayı tekrar içe aktarın.
+- Yalnızca güvendiğiniz VPN sağlayıcısından aldığınız WireGuard yapılandırmasını kullanın. Özel anahtarınızı kimseyle paylaşmayın.
+- Full Tunnel, internet trafiğini VPN'e yönlendirir. VPN bağlantısı başarısız olursa veya sunucu erişilemezse internet erişimi etkilenebilir.
+- VPN'i başlatmak için Android'in sistem VPN iznini onaylamanız gerekir.
 
-GitHub Actions, `main` dalına her gönderimde veya Actions sekmesinden manuel çalıştırıldığında `.apks` dosyası üretmeyi dener. Derleme başarılıysa `Almanca-Ogrenme-Sistem-apks` adlı artifact içinden indirilebilir.
+## Derleme
+
+GitHub Actions, `main` dalına gönderim yapıldığında veya Actions sekmesinden manuel başlatıldığında Android APK/APKS üretmeyi dener. Derleme başarılı olduğunda dosyalar Actions artifact bölümünde bulunur.
