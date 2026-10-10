@@ -1,0 +1,61 @@
+name: Build Android APKS
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main" ]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/gradle-build-action@v3
+        with:
+          gradle-version: '8.9'
+
+      - name: Build Android App Bundle
+        run: gradle bundleDebug
+
+      - name: Create debug signing key
+        run: |
+          keytool -genkeypair -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+
+      - name: Sign bundle
+        run: |
+          jarsigner -keystore debug.keystore -storepass android -keypass android app/build/outputs/bundle/debug/app-debug.aab androiddebugkey
+
+      - name: Download bundletool
+        run: curl -L --fail --retry 3 https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar -o bundletool.jar
+
+      - name: Generate APKS file
+        run: |
+          java -jar bundletool.jar build-apks \
+            --bundle=app/build/outputs/bundle/debug/app-debug.aab \
+            --output=Almanca-Ogrenme-Sistem.apks \
+            --mode=universal \
+            --ks=debug.keystore \
+            --ks-pass=pass:android \
+            --ks-key-alias=androiddebugkey \
+            --key-pass=pass:android \
+            --overwrite
+
+      - name: Upload APKS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Almanca-Ogrenme-Sistem-apks
+          path: Almanca-Ogrenme-Sistem.apks
+          if-no-files-found: error
+          retention-days: 14
