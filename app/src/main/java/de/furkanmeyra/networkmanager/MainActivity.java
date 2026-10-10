@@ -2,16 +2,16 @@ package de.furkanmeyra.networkmanager;
 
 import android.Manifest;
 import android.app.Activity;
-import android.content.pm.PackageManager;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.NetworkCapabilities;
+import android.net.VpnService;
 import android.os.Build;
 import android.os.Bundle;
 import android.graphics.Typeface;
 import android.view.Gravity;
-import android.view.View;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -19,10 +19,12 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 public class MainActivity extends Activity {
+    private static final int VPN_REQUEST_CODE = 204;
     private ConnectivityManager connectivityManager;
     private TextView statusText;
     private TextView typeText;
     private TextView detailsText;
+    private TextView vpnStatusText;
     private LinearLayout content;
 
     @Override public void onCreate(Bundle savedInstanceState) {
@@ -43,7 +45,7 @@ public class MainActivity extends Activity {
         root.addView(title, matchWrap());
 
         TextView subtitle = new TextView(this);
-        subtitle.setText("Bağlantını görüntüle ve arka plan takibini kendin yönet.");
+        subtitle.setText("Bağlantını ve kullanıcı onaylı VPN servisini yönet.");
         subtitle.setTextSize(15);
         subtitle.setTextColor(0xFFCFD8DC);
         subtitle.setGravity(Gravity.CENTER);
@@ -82,6 +84,13 @@ public class MainActivity extends Activity {
         return t;
     }
 
+    private void addButton(String label, Runnable action) {
+        Button button = new Button(this);
+        button.setText(label);
+        button.setOnClickListener(v -> action.run());
+        content.addView(button, matchWrap());
+    }
+
     private void showDashboard() {
         content.removeAllViews();
 
@@ -92,17 +101,10 @@ public class MainActivity extends Activity {
         content.addView(typeText, matchWrap());
         detailsText = makeText("Ayrıntılar burada gösterilir.", 14, 0xFFB0BEC5, false);
         content.addView(detailsText, matchWrap());
-
-        Button refresh = new Button(this);
-        refresh.setText("Bağlantıyı yenile");
-        refresh.setOnClickListener(v -> refreshStatus());
-        content.addView(refresh, matchWrap());
+        addButton("Bağlantıyı yenile", this::refreshStatus);
 
         content.addView(makeText("Arka plan takibi", 22, 0xFFFFFFFF, true), matchWrap());
-
-        Button start = new Button(this);
-        start.setText("Takibi başlat");
-        start.setOnClickListener(v -> {
+        addButton("Takibi başlat", () -> {
             Intent intent = new Intent(this, NetworkMonitorService.class);
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent);
@@ -111,23 +113,83 @@ public class MainActivity extends Activity {
             } catch (RuntimeException e) {
                 Toast.makeText(this, "Takip başlatılamadı. Bildirim/izin ayarlarını kontrol et.", Toast.LENGTH_LONG).show();
             }
-            refreshStatus();
         });
-        content.addView(start, matchWrap());
-
-        Button stop = new Button(this);
-        stop.setText("Takibi durdur");
-        stop.setOnClickListener(v -> {
+        addButton("Takibi durdur", () -> {
             stopService(new Intent(this, NetworkMonitorService.class));
             Toast.makeText(this, "Ağ takibi durduruldu.", Toast.LENGTH_SHORT).show();
         });
-        content.addView(stop, matchWrap());
+
+        content.addView(makeText("VPN kontrolü", 22, 0xFFFFFFFF, true), matchWrap());
+        vpnStatusText = makeText("VPN durumu kontrol ediliyor…", 18, 0xFF80CBC4, true);
+        content.addView(vpnStatusText, matchWrap());
+        addButton("VPN'i aç", this::requestVpnStart);
+        addButton("VPN'i kapat", this::stopVpn);
 
         content.addView(makeText(
-            "Bilgi: Bu sürüm yalnızca ağ bağlantısının durumunu izler. İnternet trafiğini engellemez, diğer uygulamaların bağlantılarını değiştirmez ve uygulamayı gizlemez. Takip başlatıldığında Android, devam eden hizmet için bildirim gösterebilir.",
+            "VPN altyapısı ilk aşamadadır. Şu an kullanıcı onayıyla bir VPN arayüzü oluşturur ancak trafik rotası/DNS eklemez ve internet trafiğini yakalamaz ya da engellemez. Gerçek trafik yönlendirmesi ayrı bir sonraki geliştirmedir. Android, VPN çalışırken durum bildirimi gösterebilir.",
             14, 0xFFFFCC80, false), matchWrap());
 
         refreshStatus();
+        refreshVpnStatus();
+    }
+
+    private void requestVpnStart() {
+        if (VpnControlService.running) {
+            Toast.makeText(this, "VPN zaten çalışıyor.", Toast.LENGTH_SHORT).show();
+            refreshVpnStatus();
+            return;
+        }
+        Intent consentIntent = VpnService.prepare(this);
+        if (consentIntent != null) {
+            startActivityForResult(consentIntent, VPN_REQUEST_CODE);
+        } else {
+            startVpnService();
+        }
+    }
+
+    private void startVpnService() {
+        try {
+            Intent intent = new Intent(this, VpnControlService.class);
+            intent.setAction(VpnControlService.ACTION_START);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent);
+            else startService(intent);
+            Toast.makeText(this, "VPN başlatma isteği gönderildi.", Toast.LENGTH_SHORT).show();
+        } catch (RuntimeException e) {
+            Toast.makeText(this, "VPN başlatılamadı. İzin ve sistem ayarlarını kontrol et.", Toast.LENGTH_LONG).show();
+        }
+        refreshVpnStatus();
+    }
+
+    private void stopVpn() {
+        Intent intent = new Intent(this, VpnControlService.class);
+        intent.setAction(VpnControlService.ACTION_STOP);
+        try {
+            startService(intent);
+        } catch (RuntimeException ignored) {
+            stopService(new Intent(this, VpnControlService.class));
+        }
+        VpnControlService.running = false;
+        Toast.makeText(this, "VPN kapatma isteği gönderildi.", Toast.LENGTH_SHORT).show();
+        refreshVpnStatus();
+    }
+
+    @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == VPN_REQUEST_CODE) {
+            if (resultCode == RESULT_OK) {
+                startVpnService();
+            } else {
+                Toast.makeText(this, "VPN izni verilmedi; VPN başlatılmadı.", Toast.LENGTH_LONG).show();
+            }
+            refreshVpnStatus();
+        }
+    }
+
+    private void refreshVpnStatus() {
+        if (vpnStatusText == null) return;
+        vpnStatusText.setText(VpnControlService.running
+            ? "● VPN altyapısı açık (trafik yönlendirmesi kapalı)"
+            : "● VPN kapalı");
     }
 
     private void refreshStatus() {
@@ -154,5 +216,6 @@ public class MainActivity extends Activity {
     @Override protected void onResume() {
         super.onResume();
         refreshStatus();
+        refreshVpnStatus();
     }
 }
