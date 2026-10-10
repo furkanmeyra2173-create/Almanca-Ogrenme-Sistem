@@ -15,8 +15,8 @@ import java.util.function.Consumer;
 
 /**
  * In-memory WireGuard controller. Configuration is never logged or persisted.
- * To protect ordinary internet access, this app only accepts split-tunnel
- * configurations: no IPv4/IPv6 default route and no VPN-wide DNS override.
+ * Supports provider-supplied split-tunnel and full-tunnel configurations.
+ * Full-tunnel routes and provider DNS are accepted only from a user-imported config.
  */
 public final class WireGuardController {
     private WireGuardController() {}
@@ -37,34 +37,28 @@ public final class WireGuardController {
 
     public static void setConfig(Config value) {
         config = value;
-        lastStatus = "WireGuard yapılandırması hazır (yalnızca bölünmüş tünel)";
+        lastStatus = "WireGuard yapılandırması hazır";
     }
 
     public static boolean hasConfig() { return config != null; }
     public static boolean isConnected() { return connected; }
     public static String getStatus() { return lastStatus; }
 
-    public static void validateSafeSplitTunnel(Config candidate) {
+    public static void validateConfig(Config candidate) {
         if (candidate == null || candidate.getPeers().isEmpty()) {
             throw new IllegalArgumentException("Dosyada en az bir WireGuard [Peer] bölümü bulunmalı.");
         }
         if (candidate.getInterface().getAddresses().isEmpty()) {
             throw new IllegalArgumentException("[Interface] bölümünde Address gerekli.");
         }
-        if (!candidate.getInterface().getDnsServers().isEmpty()) {
-            throw new IllegalArgumentException("Güvenlik için DNS satırları kabul edilmiyor; normal internet DNS ayarları korunmalı.");
-        }
-
         boolean hasRoute = false;
         for (Peer peer : candidate.getPeers()) {
             if (!peer.getEndpoint().isPresent()) {
                 throw new IllegalArgumentException("Her eş için Endpoint tanımlanmalı.");
             }
             for (InetNetwork network : peer.getAllowedIps()) {
-                // A zero-length prefix is a default route and can capture all traffic.
-                if (network.getMask() <= 1) {
-                    throw new IllegalArgumentException("Varsayılan veya çok geniş /0-/1 rotaları güvenlik için engellendi. Yalnızca sınırlı bölünmüş tünel yapılandırması kullan.");
-                }
+                // Provider configs may intentionally route all IPv4/IPv6 traffic
+                // through the VPN using 0.0.0.0/0 and ::/0.
                 hasRoute = true;
             }
         }
@@ -81,14 +75,14 @@ public final class WireGuardController {
                 return;
             }
             try {
-                validateSafeSplitTunnel(current);
+                validateConfig(current);
                 if (backend == null) backend = new GoBackend(context.getApplicationContext());
                 backend.setState(TUNNEL, Tunnel.State.UP, current);
                 connected = backend.getState(TUNNEL) == Tunnel.State.UP;
-                lastStatus = connected ? "WireGuard bağlı (bölünmüş tünel)" : "WireGuard bağlantısı kurulamadı";
+                lastStatus = connected ? "WireGuard VPN bağlantısı açık" : "WireGuard bağlantısı kurulamadı";
                 callback.accept(lastStatus);
             } catch (Exception e) {
-                // Tear down any partially-created tunnel; no default route was accepted.
+                // Tear down any partially-created tunnel after a connection failure.
                 try {
                     if (backend != null) backend.setState(TUNNEL, Tunnel.State.DOWN, null);
                 } catch (Exception ignored) {}
