@@ -1,6 +1,8 @@
 package de.furkanmeyra.networkmanager;
 
+import android.Manifest;
 import android.app.Activity;
+import android.content.pm.PackageManager;
 import android.content.Intent;
 import android.net.ConnectivityManager;
 import android.net.Network;
@@ -57,6 +59,10 @@ public class MainActivity extends Activity {
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1));
         setContentView(root);
 
+        if (Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 11);
+        }
         showDashboard();
     }
 
