@@ -61,7 +61,6 @@ public class NetworkMonitorService extends Service {
                 .setContentText(text)
                 .setSmallIcon(android.R.drawable.stat_sys_download_done)
                 .setOngoing(true)
-                .setSilent(true)
                 .build();
         }
         return new Notification.Builder(this)
@@ -72,7 +71,6 @@ public class NetworkMonitorService extends Service {
             .setPriority(Notification.PRIORITY_LOW)
             .setSound(null)
             .setVibrate(new long[] {0L})
-            .setOngoing(true)
             .build();
     }
 
