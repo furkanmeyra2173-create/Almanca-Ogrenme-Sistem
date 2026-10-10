@@ -19,6 +19,18 @@
             </intent-filter>
         </activity>
         <service
+            android:name=".VpnControlService"
+            android:permission="android.permission.BIND_VPN_SERVICE"
+            android:exported="true"
+            android:foregroundServiceType="specialUse">
+            <intent-filter>
+                <action android:name="android.net.VpnService" />
+            </intent-filter>
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="User-started VPN connection control" />
+        </service>
+        <service
             android:name=".NetworkMonitorService"
             android:exported="false"
             android:foregroundServiceType="specialUse">
