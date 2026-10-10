@@ -6,7 +6,7 @@ on:
     branches: [ "main" ]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -40,22 +40,38 @@ jobs:
       - name: Download bundletool
         run: curl -L --fail --retry 3 https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar -o bundletool.jar
 
-      - name: Generate APKS file
+      - name: Generate universal APKS file
         run: |
           java -jar bundletool.jar build-apks \
             --bundle=app/build/outputs/bundle/debug/app-debug.aab \
-            --output=Almanca-Ogrenme-Sistem.apks \
+            --output=Ag-Yonetimi.apks \
             --mode=universal \
             --ks=debug.keystore \
             --ks-pass=pass:android \
             --ks-key-alias=androiddebugkey \
             --key-pass=pass:android \
             --overwrite
+          unzip -p Ag-Yonetimi.apks universal.apk > Ag-Yonetimi.apk
+          test -s Ag-Yonetimi.apk
 
-      - name: Upload APKS artifact
+      - name: Upload installable APK and APKS artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Almanca-Ogrenme-Sistem-apks
-          path: Almanca-Ogrenme-Sistem.apks
+          name: Ag-Yonetimi-Android
+          path: |
+            Ag-Yonetimi.apk
+            Ag-Yonetimi.apks
           if-no-files-found: error
           retention-days: 14
+
+      - name: Publish GitHub Release
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: v1.0.0-build.${{ github.run_number }}
+        run: |
+          gh release create "$TAG_NAME" Ag-Yonetimi.apk Ag-Yonetimi.apks \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "Ağ Yönetimi Android $TAG_NAME" \
+            --notes "Automated Android build. Ag-Yonetimi.apk is the installable universal APK. Ag-Yonetimi.apks is the bundletool package. This build currently includes VPN service scaffolding only; it does not route internet traffic until an upstream VPN endpoint/protocol is configured."
